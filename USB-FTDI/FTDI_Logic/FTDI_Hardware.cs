@@ -111,12 +111,11 @@ namespace FTDI
         {
 			RX_FTDI_Queue = new FTDI_Queue_t();
 
-			RX_FTDI_Queue.HeadPack = 0;
-			RX_FTDI_Queue.lastIndexRaw = 0;
-			RX_FTDI_Queue.TailPack = 0;
-			RX_FTDI_Queue.lenghtRaw = 0;
+			
 			RX_FTDI_Queue.dataRaw = new byte[512];
 			RX_FTDI_Queue.dataPACK = new FTDI_Data_t[10];
+			for (int i = 0; i < 10; i++)
+				RX_FTDI_Queue.dataPACK[i].data = new byte[64];
 
 
 			myFtdiDevice = new FTD2XX_NET.FTDI();
@@ -225,6 +224,7 @@ namespace FTDI
                 {
                     // Считываем данные из FTDI в програманый буфер
                     myFtdiDevice.Read(RX_FTDI_Queue.dataRaw, numBytesAvailable, ref RX_FTDI_Queue.lenghtRaw);
+					numBytesAvailable = 0;                                      
 					RX_FTDI_Queue.CreatePack(0x78,0x23);
 
 				}

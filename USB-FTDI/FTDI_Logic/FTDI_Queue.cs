@@ -46,8 +46,20 @@ namespace USB_FTDI.FTDI_Logic
 			// Cоздаем пакеты с данными, пока не дойдем до начала массива
 			while (this.lenghtRaw != 0)
 			{
-				// Индекс стоп байта								
-				int IndexStopByte = Array.IndexOf(this.dataRaw, StopByte , (int)this.lastIndexRaw, (int)this.lenghtRaw);
+				int IndexStopByte = -1;
+				// Находим индекс следующего стоп байта	
+				try
+				{
+					IndexStopByte = Array.IndexOf(this.dataRaw, StopByte, (int)this.lastIndexRaw, (int)this.lenghtRaw);
+				}
+				catch
+				{
+					IndexStopByte = -1;
+					this.lastIndexRaw = 0;
+					this.lenghtRaw = 0;
+					this.lastIndexRaw = 0;
+					Array.Clear(this.dataRaw, 0, 512);
+				}
 
 				// Если есть стоп байт
 				if (IndexStopByte != -1)
@@ -57,24 +69,25 @@ namespace USB_FTDI.FTDI_Logic
 						return;
 
 					// Проверяем стартовый байт
-					if (this.dataRaw[lastIndexRaw] == StartByte)
+					if (this.dataRaw[this.lastIndexRaw] == StartByte)
 					{
 						// Копируем данные из массива с голыми данными в массив с обработанныими
-						Array.Copy(this.dataRaw, lastIndexRaw, this.dataPACK[HeadPack].data, 0, (IndexStopByte - lastIndexRaw));
+						Array.Copy(this.dataRaw, this.lastIndexRaw, this.dataPACK[this.HeadPack].data, 0, (IndexStopByte - this.lastIndexRaw));
 
-						this.dataPACK[HeadPack].ValidIndex = ((byte)(IndexStopByte - lastIndexRaw));  // В массив с готовыми пакетами кладем длину
+						this.dataPACK[HeadPack].ValidIndex = ((byte)(IndexStopByte - this.lastIndexRaw));  // В массив с готовыми пакетами кладем длину
 																									  // Имитация очереди
 						if (++this.HeadPack >= 10)
 							this.HeadPack = 0;
 
-						lastIndexRaw = (uint)IndexStopByte;         // Смещаем индекс
+						this.lastIndexRaw = (uint)IndexStopByte + 1;         // Смещаем индекс
 					}
 				}
 				// В массиве нет готовых пакетов
                 else
                 {
-					lastIndexRaw = 0;
+					this.lastIndexRaw = 0;
 					this.lenghtRaw = 0;
+					this.lastIndexRaw = 0;
 					Array.Clear(this.dataRaw, 0, 512);
 				}
 			}
