@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
+using System.Windows;
 using FTD2XX_NET;
 using USB_FTDI.FTDI_Logic;
 
@@ -107,8 +108,8 @@ namespace FTDI
 
 
 		// Конструкутор
-        public FTDI_Hardware()
-        {
+		public FTDI_Hardware()
+		{
 			RX_FTDI_Queue = new FTDI_Queue_t();
 
 			
@@ -207,33 +208,57 @@ namespace FTDI
 			return FTDI_Hardware_Status_e.ftdiSt_OK;
 		}
 
-        public void recieve_thread()
-        {
-            uint numBytesAvailable = 0;             // Доступное кол-во байт для чтения
-            uint numBytesRead = 0;                  // Кол-во прочитанных байт
-            while (rxThreadAlive)
-            {
-                // Флаг события
-                rxWait.WaitOne(100);
+		public void recieve_thread()
+		{
+			uint numBytesAvailable = 0;             // Доступное кол-во байт для чтения
+			uint numBytesRead = 0;                  // Кол-во прочитанных байт
+			byte[] local_buf = new byte[128];
+			while (rxThreadAlive)
+			{
+				// Флаг события
+				rxWait.WaitOne(100);
 
-                // Получить кол-во доступных для чтения байт
-                ftStatus = myFtdiDevice.GetRxBytesAvailable(ref numBytesAvailable);
+				// Получить кол-во доступных для чтения байт
+				ftStatus = myFtdiDevice.GetRxBytesAvailable(ref numBytesAvailable);
 
 				// Если есть доступные данные
-                if (numBytesAvailable > 1)
-                {
-                    // Считываем данные из FTDI в програманый буфер
-                    myFtdiDevice.Read(RX_FTDI_Queue.dataRaw, numBytesAvailable, ref RX_FTDI_Queue.lenghtRaw);
-					numBytesAvailable = 0;                                      
-					RX_FTDI_Queue.CreatePack(0x78,0x23);
+				if (numBytesAvailable > 1)
+				{
+					// Считываем данные из FTDI в програманый буфер
+					myFtdiDevice.Read(RX_FTDI_Queue.dataRaw, numBytesAvailable, ref numBytesRead);
+
+					// Возможно можно счиитать не все достуаные байты
+					if (numBytesRead != numBytesAvailable)
+					{
+						while (true)
+						{
+							MessageBox.Show("нЕ УДАЛОСЬ СЧИТАТЬ БУФЕР");
+						}
+					}
+
+					Int32 Index_Start_Byte = 0;
+					Index_Start_Byte = Array.IndexOf(RX_FTDI_Queue.dataRaw,RX_FTDI_Queue.GetStartByte());    // Находим начало пакета
+
+					while (Index_Start_Byte != -1)
+					{
+						// Проверка стопового байта
+						if (RX_FTDI_Queue.dataRaw[RX_FTDI_Queue.GetLenghtPack() + Index_Start_Byte] ==  RX_FTDI_Queue.GetStopByte())
+						{
+							Array.Copy(RX_FTDI_Queue.dataRaw, Index_Start_Byte + 1, local_buf, 0, RX_FTDI_Queue.GetLenghtPack() - 1);
+							RX_FTDI_Queue.FTDI_TxQueue_WriteMsg(local_buf, (byte)(RX_FTDI_Queue.GetLenghtPack() - 2));
+						}
+						
+					}
+
+					
 
 				}
 
 
-            }
-        }
+			}
+		}
 
-    }
+	}
 
 }
 

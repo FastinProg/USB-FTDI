@@ -6,3 +6,9 @@
 *.cache
 *.cache
 *.exe
+.vs/USB-FTDI/v16/.suo
+*.exe
+*.cache
+*.cache
+*.exe
+*.pdb

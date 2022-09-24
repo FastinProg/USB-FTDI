@@ -4,6 +4,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
+using RTools;
 
 namespace USB_FTDI.FTDI_Logic
 {
@@ -16,7 +17,7 @@ namespace USB_FTDI.FTDI_Logic
 		// Размер данных не более 64 байт
 		[MarshalAs(UnmanagedType.ByValArray, SizeConst = 64)]
 		public byte[] data;
-		public UInt32 ValidIndex; // Индекс с последним валидным значением
+		public UInt32 Lenght;
 	};
 
 	/// <summary>
@@ -25,10 +26,16 @@ namespace USB_FTDI.FTDI_Logic
 	[StructLayout(LayoutKind.Sequential, Pack = 1)]
 	unsafe public struct FTDI_Queue_t
 	{
+		// Настройка драйвера и пртокола
+		const UInt32 FTDI_TxQueueMaxSize = 10;
+
+		public const byte LenghtPack = 64;
+		public const Byte StartPack = 0x78;
+		public const Byte EndPack = 0x23;
+
 		[MarshalAs(UnmanagedType.ByValArray, SizeConst = 512)]
 		public byte[] dataRaw;          // Массив голых данных
-		public uint lenghtRaw;          // Длина полученных голых данных
-		public uint lastIndexRaw;		// Последний индекс проверенного байта
+
 
 		[MarshalAs(UnmanagedType.ByValArray, SizeConst = 68 * 10)]
 		public FTDI_Data_t[] dataPACK;        // Масив готовых пакетов
@@ -36,62 +43,76 @@ namespace USB_FTDI.FTDI_Logic
 		public Byte HeadPack;         // Количество готовых для чтения пакетов
 		public Byte TailPack;         // Количество прочитанных сообщений 	
 
-
-		// Создать пакеты из голых данных
-		public void CreatePack(Byte StartByte, Byte StopByte)
+		// Запись указанного сообщения в очередь
+		public int FTDI_TxQueue_WriteMsg(Array buf, Byte size)
 		{
-			if (this.lenghtRaw == 0)
-				return;
+			int next = this.HeadPack + 1;
+			if (next >= FTDI_TxQueueMaxSize)
+				next = 0;
 
-			// Cоздаем пакеты с данными, пока не дойдем до начала массива
-			while (this.lenghtRaw != 0)
-			{
-				int IndexStopByte = -1;
-				// Находим индекс следующего стоп байта	
-				try
-				{
-					IndexStopByte = Array.IndexOf(this.dataRaw, StopByte, (int)this.lastIndexRaw, (int)this.lenghtRaw);
-				}
-				catch
-				{
-					IndexStopByte = -1;
-					this.lastIndexRaw = 0;
-					this.lenghtRaw = 0;
-					this.lastIndexRaw = 0;
-					Array.Clear(this.dataRaw, 0, 512);
-				}
+			if (next == this.TailPack)     // Буфер полный
+				return 0;
 
-				// Если есть стоп байт
-				if (IndexStopByte != -1)
-				{
-					// Проверяем длину
-					if (IndexStopByte == 0)
-						return;
+			Array.Copy(buf, this.dataPACK[this.HeadPack].data, (int)size);
+			this.dataPACK[this.HeadPack].Lenght = size;
+			this.HeadPack = (byte)next;			
+			return 1;
+		}
 
-					// Проверяем стартовый байт
-					if (this.dataRaw[this.lastIndexRaw] == StartByte)
-					{
-						// Копируем данные из массива с голыми данными в массив с обработанныими
-						Array.Copy(this.dataRaw, this.lastIndexRaw, this.dataPACK[this.HeadPack].data, 0, (IndexStopByte - this.lastIndexRaw));
+		// Чтение из очереди исходящего сообщения
+		//	return 0 - ошибка
+		//	return 1 -коректео
+		public int FTDI_TxQueue_ReadMsg(ref FTDI_Data_t buf)
+		{
+			if (this.HeadPack == this.TailPack)       // Буфер пустой
+				return 0;
 
-						this.dataPACK[HeadPack].ValidIndex = ((byte)(IndexStopByte - this.lastIndexRaw));  // В массив с готовыми пакетами кладем длину
-																									  // Имитация очереди
-						if (++this.HeadPack >= 10)
-							this.HeadPack = 0;
+			int next = this.TailPack + 1;
+			if (next >= FTDI_TxQueueMaxSize)
+				next = 0;
 
-						this.lastIndexRaw = (uint)IndexStopByte + 1;         // Смещаем индекс
-					}
-				}
-				// В массиве нет готовых пакетов
-                else
-                {
-					this.lastIndexRaw = 0;
-					this.lenghtRaw = 0;
-					this.lastIndexRaw = 0;
-					Array.Clear(this.dataRaw, 0, 512);
-				}
-			}
+			buf = this.dataPACK[this.TailPack];
+			this.TailPack = (byte)next;
+			return 1;
+		}
 
+		// return 1 - пустой
+		// return 0 - не пустой
+		public int FTDI_TxQueue_IsEmpty()
+		{
+			if (HeadPack == TailPack)       // Буфер пустой
+				return 1;
+			else
+				return 0;
+		}
+
+		// return 1 - переполнен
+		// return 0 - не переполнен
+		public int FTDI_TxQueue_IsFull()
+		{
+			int next = HeadPack + 1;
+			if (next >= FTDI_TxQueueMaxSize)
+				next = 1;
+
+			if (next == TailPack)     // Буфер полный
+				return 1;
+			else
+				return 0;
+		}
+
+		public byte GetStartByte()
+		{
+			return StartPack;
+		}
+
+		public byte GetStopByte()
+		{
+			return EndPack;
+		}
+
+		public byte GetLenghtPack()
+		{
+			return LenghtPack;
 		}
 	};
 }
